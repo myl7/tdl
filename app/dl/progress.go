@@ -9,67 +9,53 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fatih/color"
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/go-faster/errors"
-	pw "github.com/jedib0t/go-pretty/v6/progress"
 
 	"github.com/iyear/tdl/core/downloader"
 	"github.com/iyear/tdl/core/util/fsutil"
-	"github.com/iyear/tdl/pkg/prog"
-	"github.com/iyear/tdl/pkg/utils"
 )
 
 type progress struct {
-	pw       pw.Writer
-	trackers *sync.Map // map[ID]*pw.Tracker
-	opts     Options
+	mu   sync.Mutex // guards stdout so concurrent log lines don't interleave
+	opts Options
 
 	it *iter
 }
 
-func newProgress(p pw.Writer, it *iter, opts Options) *progress {
+func newProgress(it *iter, opts Options) *progress {
 	return &progress{
-		pw:       p,
-		trackers: &sync.Map{},
-		opts:     opts,
-		it:       it,
+		opts: opts,
+		it:   it,
 	}
+}
+
+// logf prints a single log line to stdout, prefixed with a timestamp.
+func (p *progress) logf(format string, args ...any) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	fmt.Printf("%s %s\n", time.Now().Format("2006-01-02 15:04:05"), fmt.Sprintf(format, args...))
 }
 
 func (p *progress) OnAdd(elem downloader.Elem) {
-	tracker := prog.AppendTracker(p.pw, utils.Byte.FormatBinaryBytes, p.processMessage(elem), elem.File().Size())
-	p.trackers.Store(elem.(*iterElem).id, tracker)
+	p.logf("start: %s", p.elemString(elem))
 }
 
-func (p *progress) OnDownload(elem downloader.Elem, state downloader.ProgressState) {
-	tracker, ok := p.trackers.Load(elem.(*iterElem).id)
-	if !ok {
-		return
-	}
-
-	t := tracker.(*pw.Tracker)
-	t.UpdateTotal(state.Total)
-	t.SetValue(state.Downloaded)
+func (p *progress) OnDownload(_ downloader.Elem, _ downloader.ProgressState) {
+	// no progress bar, nothing to do per chunk
 }
 
 func (p *progress) OnDone(elem downloader.Elem, err error) {
 	e := elem.(*iterElem)
 
-	tracker, ok := p.trackers.Load(e.id)
-	if !ok {
-		return
-	}
-	t := tracker.(*pw.Tracker)
-
-	if err := e.to.Close(); err != nil {
-		p.fail(t, elem, errors.Wrap(err, "close file"))
+	if cerr := e.to.Close(); cerr != nil {
+		p.fail(elem, errors.Wrap(cerr, "close file"))
 		return
 	}
 
 	if err != nil {
 		if !errors.Is(err, context.Canceled) { // don't report user cancel
-			p.fail(t, elem, errors.Wrap(err, "progress"))
+			p.fail(elem, errors.Wrap(err, "progress"))
 		}
 		_ = os.Remove(e.to.Name()) // just try to remove temp file, ignore error
 		return
@@ -78,9 +64,11 @@ func (p *progress) OnDone(elem downloader.Elem, err error) {
 	p.it.Finish(e.logicalPos)
 
 	if err := p.donePost(e); err != nil {
-		p.fail(t, elem, errors.Wrap(err, "post file"))
+		p.fail(elem, errors.Wrap(err, "post file"))
 		return
 	}
+
+	p.logf("done: %s", p.elemString(elem))
 }
 
 func (p *progress) donePost(elem *iterElem) error {
@@ -113,13 +101,8 @@ func (p *progress) donePost(elem *iterElem) error {
 	return nil
 }
 
-func (p *progress) fail(t *pw.Tracker, elem downloader.Elem, err error) {
-	p.pw.Log(color.RedString("%s error: %s", p.elemString(elem), err.Error()))
-	t.MarkAsErrored()
-}
-
-func (p *progress) processMessage(elem downloader.Elem) string {
-	return p.elemString(elem)
+func (p *progress) fail(elem downloader.Elem, err error) {
+	p.logf("failed: %s error: %s", p.elemString(elem), err.Error())
 }
 
 func (p *progress) elemString(elem downloader.Elem) string {

@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/AlecAivazis/survey/v2"
-	"github.com/fatih/color"
 	"github.com/go-faster/errors"
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/peers"
@@ -21,9 +20,7 @@ import (
 	"github.com/iyear/tdl/core/tclient"
 	"github.com/iyear/tdl/pkg/consts"
 	"github.com/iyear/tdl/pkg/key"
-	"github.com/iyear/tdl/pkg/prog"
 	"github.com/iyear/tdl/pkg/tmessage"
-	"github.com/iyear/tdl/pkg/utils"
 )
 
 type Options struct {
@@ -86,7 +83,7 @@ func Run(ctx context.Context, c *telegram.Client, kvd storage.Storage, opts Opti
 			return err
 		}
 	} else {
-		color.Yellow("Restart download by 'restart' flag")
+		fmt.Println("Restart download by 'restart' flag")
 	}
 
 	defer func() { // save progress
@@ -97,17 +94,11 @@ func Run(ctx context.Context, c *telegram.Client, kvd storage.Storage, opts Opti
 		}
 	}()
 
-	dlProgress := prog.New(utils.Byte.FormatBinaryBytes)
-	dlProgress.SetNumTrackersExpected(it.Total())
-	if !viper.GetBool(consts.FlagDisableProgressPS) {
-		prog.EnablePS(ctx, dlProgress)
-	}
-
 	options := downloader.Options{
 		Pool:     pool,
 		Threads:  viper.GetInt(consts.FlagThreads),
 		Iter:     it,
-		Progress: newProgress(dlProgress, it, opts),
+		Progress: newProgress(it, opts),
 	}
 	limit := viper.GetInt(consts.FlagLimit)
 
@@ -118,22 +109,18 @@ func Run(ctx context.Context, c *telegram.Client, kvd storage.Storage, opts Opti
 		zap.Int("threads", options.Threads),
 		zap.Int("limit", limit))
 
-	color.Green("All files will be downloaded to '%s' dir", opts.Dir)
+	fmt.Printf("All files will be downloaded to '%s' dir\n", opts.Dir)
 
-	go dlProgress.Render()
 	defer func() {
-		prog.Wait(ctx, dlProgress)
-
 		// Notify user if any messages were skipped due to deletion
-		// This is deferred to ensure it shows after progress rendering completes
 		if skipped := it.SkippedDeleted(); skipped > 0 {
 			deletedIDs := it.DeletedIDs()
 			if len(deletedIDs) <= 5 {
 				// Show all IDs if 5 or fewer
-				color.Yellow("⚠️  %d message(s) were skipped because they were deleted: %v", skipped, deletedIDs)
+				fmt.Printf("%d message(s) were skipped because they were deleted: %v\n", skipped, deletedIDs)
 			} else {
 				// Show first 5 and indicate there are more
-				color.Yellow("⚠️  %d message(s) were skipped because they were deleted: %v... and %d more",
+				fmt.Printf("%d message(s) were skipped because they were deleted: %v... and %d more\n",
 					skipped, deletedIDs[:5], len(deletedIDs)-5)
 			}
 		}
@@ -180,12 +167,12 @@ func resume(ctx context.Context, kvd storage.Storage, iter *iter, ask bool) erro
 	resumeStr := fmt.Sprintf("Found unfinished download, continue from '%d/%d'", len(finished), iter.Total())
 	if ask {
 		if err = survey.AskOne(&survey.Confirm{
-			Message: color.YellowString(resumeStr + "?"),
+			Message: resumeStr + "?",
 		}, &confirm); err != nil {
 			return err
 		}
 	} else {
-		color.Yellow(resumeStr)
+		fmt.Println(resumeStr)
 		confirm = true
 	}
 
