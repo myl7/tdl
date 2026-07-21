@@ -1,3 +1,15 @@
+> **A customized fork of [iyear/tdl](https://github.com/iyear/tdl)**, used as the download engine for [tg-channel-archive](https://github.com/myl7/tg-channel-archive).
+
+**What this fork changes**
+
+- **`tdl dl --keep-order`**: a new flag that downloads messages in the exact order given by `--file` / `--url`, instead of sorting by message id. This lets the caller control the download order, for example by media size.
+- **Concurrent processes on one namespace**: the bolt session database is opened per operation instead of being held open for the whole process, so several `tdl` commands can share one namespace without locking each other out.
+- **Log lines instead of a progress bar**: `tdl dl` prints a plain timestamped `start:` / `done:` line per file, with no progress bar and no color, which suits logs and non-interactive use.
+
+Everything below is the upstream README, unchanged.
+
+---
+
 # tdl
 
 <img align="right" src="docs/assets/img/logo.png" height="280" alt="">
