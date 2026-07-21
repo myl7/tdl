@@ -91,7 +91,7 @@ func newIter(pool dcpool.Pool, manager *peers.Manager, dialog [][]*tmessage.Dial
 	excludeMap := filterMap.New(opts.Exclude, fsutil.AddPrefixDot)
 
 	// to keep fingerprint stable
-	sortDialogs(dialogs, opts.Desc)
+	sortDialogs(dialogs, opts.Desc, opts.KeepOrder)
 
 	return &iter{
 		pool:    pool,
@@ -387,11 +387,18 @@ func flatDialogs(dialogs [][]*tmessage.Dialog) []*tmessage.Dialog {
 	return res
 }
 
-func sortDialogs(dialogs []*tmessage.Dialog, desc bool) {
+func sortDialogs(dialogs []*tmessage.Dialog, desc, keepOrder bool) {
 	sort.Slice(dialogs, func(i, j int) bool {
 		return tutil.GetInputPeerID(dialogs[i].Peer) <
 			tutil.GetInputPeerID(dialogs[j].Peer) // increasing order
 	})
+
+	// keepOrder preserves the message order as given by --file/--url, so a
+	// caller that already sorted its input (e.g. by media size) controls the
+	// download order. The per-dialog sort above stays for a stable fingerprint.
+	if keepOrder {
+		return
+	}
 
 	for _, m := range dialogs {
 		sort.Slice(m.Messages, func(i, j int) bool {

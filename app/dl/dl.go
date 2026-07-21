@@ -33,6 +33,7 @@ type Options struct {
 	Include    []string
 	Exclude    []string
 	Desc       bool
+	KeepOrder  bool // download in the given -f/-u order instead of sorting by message id
 	Takeout    bool
 	Group      bool // auto detect grouped message
 
