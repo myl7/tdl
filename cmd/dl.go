@@ -58,6 +58,7 @@ func NewDownload() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.SkipSame, "skip-same", false, "skip files with the same name(without extension) and size")
 
 	cmd.Flags().BoolVar(&opts.Desc, "desc", false, "download files from the newest to the oldest ones (may affect resume download)")
+	cmd.Flags().BoolVar(&opts.KeepOrder, "keep-order", false, "download in the order given by --file/--url instead of sorting by message id (lets the caller order by e.g. media size)")
 	cmd.Flags().BoolVar(&opts.Takeout, "takeout", false, "takeout sessions let you export data from your account with lower flood wait limits.")
 	cmd.Flags().BoolVar(&opts.Group, "group", false, "auto detect grouped message and download all of them")
 
@@ -76,6 +77,7 @@ func NewDownload() *cobra.Command {
 	_ = cmd.MarkFlagDirname(dir)
 	cmd.MarkFlagsMutuallyExclusive(include, exclude)
 	cmd.MarkFlagsMutuallyExclusive(_continue, restart)
+	cmd.MarkFlagsMutuallyExclusive("desc", "keep-order")
 
 	return cmd
 }
