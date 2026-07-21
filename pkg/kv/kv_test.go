@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -122,6 +123,80 @@ func TestStorage_MigrateTo(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, meta, m)
 	})
+}
+
+// TestBolt_ConcurrentProcesses verifies that two independent bolt instances on
+// the same path (simulating two tdl processes) can both open and read/write the
+// same namespace. Before opening the database per operation, the second
+// instance would fail with a lock timeout because the first held the file lock
+// for its whole lifetime.
+func TestBolt_ConcurrentProcesses(t *testing.T) {
+	path := t.TempDir()
+	opts := map[string]any{"path": path}
+
+	p1, err := New(DriverBolt, opts)
+	require.NoError(t, err)
+	defer func() { assert.NoError(t, p1.Close()) }()
+
+	p2, err := New(DriverBolt, opts)
+	require.NoError(t, err)
+	defer func() { assert.NoError(t, p2.Close()) }()
+
+	kv1, err := p1.Open("default")
+	require.NoError(t, err)
+	kv2, err := p2.Open("default")
+	require.NoError(t, err)
+
+	require.NoError(t, kv1.Set(context.TODO(), "from1", []byte("a")))
+	require.NoError(t, kv2.Set(context.TODO(), "from2", []byte("b")))
+
+	// each instance sees the other's write
+	v, err := kv2.Get(context.TODO(), "from1")
+	require.NoError(t, err)
+	require.Equal(t, []byte("a"), v)
+
+	v, err = kv1.Get(context.TODO(), "from2")
+	require.NoError(t, err)
+	require.Equal(t, []byte("b"), v)
+}
+
+// TestBolt_ConcurrentReadWrite hammers a single namespace from many goroutines
+// across two instances to shake out lock contention and data races.
+func TestBolt_ConcurrentReadWrite(t *testing.T) {
+	path := t.TempDir()
+	opts := map[string]any{"path": path}
+
+	newKV := func() Storage {
+		s, err := New(DriverBolt, opts)
+		require.NoError(t, err)
+		t.Cleanup(func() { assert.NoError(t, s.Close()) })
+		return s
+	}
+
+	kvA, err := newKV().Open("default")
+	require.NoError(t, err)
+	kvB, err := newKV().Open("default")
+	require.NoError(t, err)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(2)
+		go func(i int) {
+			defer wg.Done()
+			assert.NoError(t, kvA.Set(context.TODO(), fmt.Sprintf("a%d", i), []byte("x")))
+		}(i)
+		go func(i int) {
+			defer wg.Done()
+			assert.NoError(t, kvB.Set(context.TODO(), fmt.Sprintf("b%d", i), []byte("y")))
+		}(i)
+	}
+	wg.Wait()
+
+	for i := 0; i < 20; i++ {
+		v, err := kvA.Get(context.TODO(), fmt.Sprintf("b%d", i))
+		require.NoError(t, err)
+		require.Equal(t, []byte("y"), v)
+	}
 }
 
 func TestStorage_MigrateFrom(t *testing.T) {
