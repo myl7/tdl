@@ -1,4 +1,6 @@
-> **A customized fork of [iyear/tdl](https://github.com/iyear/tdl)**, used as the download engine for [tg-channel-archive](https://github.com/myl7/tg-channel-archive).
+> **A customized fork of [iyear/tdl](https://github.com/iyear/tdl)**, used as the download engine for [tgxiv](https://github.com/myl7/tgxiv) (formerly tg-channel-archive).
+
+> **Merged**: the patches now live in-tree as the `tdl/` subtree of [myl7/tgxiv](https://github.com/myl7/tgxiv), which calls them in-process. This fork is frozen and kept only for history.
 
 **What this fork changes**
 
