@@ -1,6 +1,6 @@
 > **A customized fork of [iyear/tdl](https://github.com/iyear/tdl)**, used as the download engine for [tgxiv](https://github.com/myl7/tgxiv) (formerly tg-channel-archive).
 
-> **Merged**: the patches now live in-tree as the `tdl/` subtree of [myl7/tgxiv](https://github.com/myl7/tgxiv), which calls them in-process. This fork is frozen and kept only for history.
+> **Build and install this fork** (`go build -o "$(go env GOPATH)/bin/tdl" .`) and put it on your `PATH`, or point tgxiv at it with `--tdl`. The engine stays this separate AGPL-3.0 program, driven at arm's length via CLI flags and JSON files, so tgxiv itself remains Apache-2.0 with no tdl code.
 
 **What this fork changes**
 
